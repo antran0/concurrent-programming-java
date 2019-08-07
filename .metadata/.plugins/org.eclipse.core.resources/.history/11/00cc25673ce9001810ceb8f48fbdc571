@@ -1,0 +1,101 @@
+package edu.coursera.concurrent;
+
+import edu.rice.pcdp.Actor;
+import static edu.rice.pcdp.PCDP.finish;
+
+/**
+ * An actor-based implementation of the Sieve of Eratosthenes.
+ *
+ * TODO Fill in the empty SieveActorActor actor class below and use it from
+ * countPrimes to determin the number of primes <= limit.
+ */
+public final class SieveActor extends Sieve {
+    /**
+     * {@inheritDoc}
+     *
+     * TODO Use the SieveActorActor class to calculate the number of primes <=
+     * limit in parallel. You might consider how you can model the Sieve of
+     * Eratosthenes as a pipeline of actors, each corresponding to a single
+     * prime number.
+     */
+    @Override
+    public int countPrimes(final int limit) {
+    	final SieveActorActor actor = new SieveActorActor(2);
+    	
+    	finish(() -> {
+	    	for (int i = 3; i <= limit; i+=2) {
+	    		actor.send(i);
+	    	}
+    	});
+    	
+    	int nPrimes = 0;
+    	SieveActorActor curr = actor;
+    	while (curr != null) {
+    		nPrimes += curr.m_nlocalPrimes;
+    		curr = curr.m_nextActor;
+    	}
+    	
+    	return nPrimes;
+    }
+
+    /**
+     * An actor class that helps implement the Sieve of Eratosthenes in
+     * parallel.
+     */
+    public static final class SieveActorActor extends Actor {
+    	private static int MAX_LOCAL_PRIMES = 10_000;
+    	
+    	private final int m_localPrimes[];
+    	private int m_nlocalPrimes;
+    	private SieveActorActor m_nextActor;
+    	
+    	public SieveActorActor(int localPrime) {
+    		m_localPrimes = new int[MAX_LOCAL_PRIMES];
+    		m_localPrimes[0] = localPrime;
+    		m_nlocalPrimes = 1;
+    		m_nextActor = null;
+    	}
+        /**
+         * Process a single message sent to this actor.
+         *
+         * TODO complete this method.
+         *
+         * @param msg Received message
+         */
+        @Override
+        public void process(final Object msg) {
+            final Integer candidate = (Integer)msg;
+            
+            boolean isLocallyPrime = false;
+        	final int n = m_nlocalPrimes;
+        	for (int i = 0; i < n; ++i) {
+        		if (candidate % m_localPrimes[i] == 0) {
+        			isLocallyPrime = false;
+        			break;
+        		}
+        	}
+            
+            if (isLocallyPrime) {
+            	if (m_nlocalPrimes < MAX_LOCAL_PRIMES) {
+	            	m_localPrimes[m_nlocalPrimes] = candidate;
+	            	m_nlocalPrimes++;
+            	} else if (m_nextActor == null) {
+            		m_nextActor = new SieveActorActor(candidate);
+            	} else {
+            		m_nextActor.send(msg);
+            	}
+            }
+        }
+        
+        private boolean isLocallyPrime(final int candidate) {
+        	final int n = m_nlocalPrimes;
+        	for (int i = 0; i < n; ++i) {
+        		if (candidate % m_localPrimes[i] == 0) {
+        			return false;
+        		}
+        	}
+        	
+        	return true;
+        }
+    }
+}
